@@ -1,14 +1,19 @@
 package kz.gov.mia.sos.widget.webview
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.net.http.SslError
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Log
 import android.webkit.SslErrorHandler
 import android.webkit.ValueCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
 
@@ -16,11 +21,16 @@ class MainActivity : AppCompatActivity(), WebView.Listener {
 
     companion object {
         private val TAG = MainActivity::class.java.simpleName
+
+        private val LOCATION_PERMISSIONS = arrayOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        )
     }
 
     private var webView: WebView? = null
 
-    private val launcher =
+    private val commonPermissionsLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
             Log.d(TAG, "registerForActivityResult() -> permissions: $permissions")
 
@@ -29,13 +39,20 @@ class MainActivity : AppCompatActivity(), WebView.Listener {
             )
 
             if (permissions.any { !it.value }) {
-                AlertDialog.Builder(this)
-                    .setTitle("Grant permissions")
-                    .setMessage("Please, provide with permissions")
-                    .setPositiveButton("To Settings") { dialog, _ ->
-                        dialog.dismiss()
-                    }
-                    .show()
+                showRequestPermissionsDialog()
+            }
+        }
+
+    private val locationPermissionsLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+            Log.d(TAG, "registerForActivityResult() -> permissions: $permissions")
+
+            val isAllPermissionsGranted = permissions.all { it.value }
+
+            webView?.setGeolocationPermissionsShowPromptResult(isAllPermissionsGranted)
+
+            if (!isAllPermissionsGranted) {
+                showRequestPermissionsDialog()
             }
         }
 
@@ -57,14 +74,6 @@ class MainActivity : AppCompatActivity(), WebView.Listener {
         setupWebView()
 
         webView?.loadUrl("https://kenes.vlx.kz/sos")
-
-//        launcher.launch(
-//            arrayOf(
-//                Manifest.permission.CAMERA,
-//                Manifest.permission.RECORD_AUDIO,
-//                Manifest.permission.MODIFY_AUDIO_SETTINGS,
-//            )
-//        )
     }
 
     private fun setupWebView() {
@@ -76,6 +85,23 @@ class MainActivity : AppCompatActivity(), WebView.Listener {
             }
         })
         webView?.setListener(this)
+    }
+
+    private fun showRequestPermissionsDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("Grant permissions")
+            .setMessage("Please, provide with permissions")
+            .setPositiveButton("To Settings") { dialog, _ ->
+                dialog.dismiss()
+
+                startActivity(
+                    Intent().apply {
+                        action = Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+                        data = Uri.fromParts("package", packageName, null)
+                    }
+                )
+            }
+            .show()
     }
 
     override fun onReceivedSSLError(handler: SslErrorHandler?, error: SslError?) {
@@ -92,11 +118,30 @@ class MainActivity : AppCompatActivity(), WebView.Listener {
         val permissions = PermissionRequestMapper.fromWebClientToAndroid(resources).toTypedArray()
         Log.d(TAG, "onPermissionRequest() -> resources: ${resources.contentToString()}")
         Log.d(TAG, "onPermissionRequest() -> permissions: ${permissions.contentToString()}")
-        launcher.launch(permissions)
+        commonPermissionsLauncher.launch(permissions)
     }
 
     override fun onPermissionRequestCanceled(resources: Array<String>) {
         Log.d(TAG, "onPermissionRequestCanceled() -> resources: ${resources.contentToString()}")
+    }
+
+    override fun onGeolocationPermissionsShowPrompt() {
+        Log.d(TAG, "onGeolocationPermissionsShowPrompt()")
+        if (LOCATION_PERMISSIONS.all {
+                ActivityCompat.checkSelfPermission(
+                    this,
+                    it
+                ) == PackageManager.PERMISSION_GRANTED
+            }
+        ) {
+            webView?.setGeolocationPermissionsShowPromptResult(true)
+        } else {
+            locationPermissionsLauncher.launch(LOCATION_PERMISSIONS)
+        }
+    }
+
+    override fun onGeolocationPermissionsHidePrompt() {
+        Log.d(TAG, "onGeolocationPermissionsHidePrompt()")
     }
 
 }

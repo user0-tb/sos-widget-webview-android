@@ -22,10 +22,16 @@ internal class WebView @JvmOverloads constructor(
         private val TAG = WebView::class.java.simpleName
     }
 
+    data class GeolocationPermissionsShowPrompt constructor(
+        val origin: String?,
+        val callback: GeolocationPermissions.Callback?
+    )
+
     private var urlListener: UrlListener? = null
     private var listener: Listener? = null
 
     private var permissionRequest: PermissionRequest? = null
+    private var geolocationPermissionsShowPrompt: GeolocationPermissionsShowPrompt? = null
 
     init {
         isFocusable = true
@@ -49,7 +55,7 @@ internal class WebView @JvmOverloads constructor(
         settings.allowUniversalAccessFromFileURLs = true
         settings.blockNetworkImage = false
         settings.blockNetworkLoads = false
-        settings.setGeolocationEnabled(false)
+        settings.setGeolocationEnabled(true)
         settings.javaScriptCanOpenWindowsAutomatically = true
         settings.loadsImagesAutomatically = true
         settings.loadWithOverviewMode = true
@@ -101,6 +107,23 @@ internal class WebView @JvmOverloads constructor(
         permissionRequest = null
     }
 
+    fun setGeolocationPermissionsShowPromptResult(success: Boolean) {
+        if (success) {
+            geolocationPermissionsShowPrompt?.callback?.invoke(
+                geolocationPermissionsShowPrompt?.origin,
+                true,
+                false
+            )
+        } else {
+            geolocationPermissionsShowPrompt?.callback?.invoke(
+                geolocationPermissionsShowPrompt?.origin,
+                false,
+                false
+            )
+        }
+        geolocationPermissionsShowPrompt = null
+    }
+
     private inner class MyWebChromeClient : WebChromeClient() {
         override fun onPermissionRequest(request: PermissionRequest?) {
             Log.d(
@@ -115,24 +138,6 @@ internal class WebView @JvmOverloads constructor(
             if (request != null) {
                 listener?.onPermissionRequest(request.resources)
             }
-
-//            if (request == null) {
-//                super.onPermissionRequest(request)
-//            } else if (request.resources.isEmpty()) {
-//                super.onPermissionRequest(request)
-//            } else {
-//                val permissions = listener?.onPermissionRequest(
-//                    PermissionRequestMapper.fromWebClientToAndroid(request.resources).toTypedArray()
-//                )
-//
-//                if (permissions.isNullOrEmpty()) {
-//                    request.deny()
-//                } else {
-//                    request.grant(
-//                        PermissionRequestMapper.fromAndroidToWebClient(permissions).toTypedArray()
-//                    )
-//                }
-//            }
         }
 
         override fun onPermissionRequestCanceled(request: PermissionRequest?) {
@@ -145,12 +150,30 @@ internal class WebView @JvmOverloads constructor(
             if (request != null) {
                 listener?.onPermissionRequestCanceled(request.resources)
             }
+        }
 
-//            request?.grant(
-//                listener?.onPermissionRequestCanceled(
-//                    PermissionRequestMapper.fromWebClientToAndroid(request.resources).toTypedArray()
-//                )
-//            )
+        override fun onGeolocationPermissionsShowPrompt(
+            origin: String?,
+            callback: GeolocationPermissions.Callback?
+        ) {
+            super.onGeolocationPermissionsShowPrompt(origin, callback)
+            Log.d(
+                TAG,
+                "onGeolocationPermissionsShowPrompt() -> origin: $origin, callback: $callback"
+            )
+
+            geolocationPermissionsShowPrompt = GeolocationPermissionsShowPrompt(origin, callback)
+
+            listener?.onGeolocationPermissionsShowPrompt()
+        }
+
+        override fun onGeolocationPermissionsHidePrompt() {
+            super.onGeolocationPermissionsHidePrompt()
+            Log.d(TAG, "onGeolocationPermissionsHidePrompt()")
+
+            geolocationPermissionsShowPrompt = null
+
+            listener?.onGeolocationPermissionsHidePrompt()
         }
 
         override fun onJsAlert(
@@ -285,6 +308,8 @@ internal class WebView @JvmOverloads constructor(
         fun onSelectFileRequested(filePathCallback: ValueCallback<Array<Uri>>?): Boolean
         fun onPermissionRequest(resources: Array<String>)
         fun onPermissionRequestCanceled(resources: Array<String>)
+        fun onGeolocationPermissionsShowPrompt()
+        fun onGeolocationPermissionsHidePrompt()
     }
 
 }
