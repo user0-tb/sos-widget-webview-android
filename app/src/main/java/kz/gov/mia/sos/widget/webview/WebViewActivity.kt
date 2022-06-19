@@ -3,24 +3,32 @@ package kz.gov.mia.sos.widget.webview
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.location.LocationManager
 import android.net.Uri
 import android.net.http.SslError
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
+import android.view.Menu
+import android.view.MenuItem
+import android.view.WindowManager
 import android.webkit.SslErrorHandler
 import android.webkit.ValueCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import androidx.core.location.LocationManagerCompat
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
+import com.google.android.material.appbar.AppBarLayout
+import com.google.android.material.appbar.MaterialToolbar
 
-class MainActivity : AppCompatActivity(), WebView.Listener {
+class WebViewActivity : AppCompatActivity(), WebView.Listener {
 
     companion object {
-        private val TAG = MainActivity::class.java.simpleName
+        private val TAG = WebViewActivity::class.java.simpleName
 
         private val LOCATION_PERMISSIONS = arrayOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
@@ -28,6 +36,8 @@ class MainActivity : AppCompatActivity(), WebView.Listener {
         )
     }
 
+    private var appBarLayout: AppBarLayout? = null
+    private var toolbar: MaterialToolbar? = null
     private var webView: WebView? = null
 
     private val commonPermissionsLauncher =
@@ -39,7 +49,7 @@ class MainActivity : AppCompatActivity(), WebView.Listener {
             )
 
             if (permissions.any { !it.value }) {
-                showRequestPermissionsDialog()
+                showRequestPermissionsAlertDialog()
             }
         }
 
@@ -52,16 +62,77 @@ class MainActivity : AppCompatActivity(), WebView.Listener {
             webView?.setGeolocationPermissionsShowPromptResult(isAllPermissionsGranted)
 
             if (!isAllPermissionsGranted) {
-                showRequestPermissionsDialog()
+                showRequestPermissionsAlertDialog()
             }
+        }
+
+    private val locationSettingsLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            Log.d(TAG, "ActivityResultContracts.StartActivityForResult() -> ${result.resultCode}")
+
+            onGeolocationPermissionsShowPrompt()
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        appBarLayout = findViewById(R.id.appBarLayout)
+        toolbar = findViewById(R.id.toolbar)
         webView = findViewById(R.id.webView)
 
+        setupActionBar()
+        setupWebView()
+
+        webView?.loadUrl("https://kenes.vlx.kz/sos")
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+        menuInflater.inflate(R.menu.webview, menu)
+        return super.onCreateOptionsMenu(menu)
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.reload -> {
+                AlertDialog.Builder(this, R.style.SOSWidgetWebViewWebView_AlertDialogTheme)
+                    .setTitle(android.R.string.dialog_alert_title)
+                    .setMessage("Do you really want to reload widget?")
+                    .setNegativeButton(android.R.string.cancel) { dialog, _ ->
+                        dialog.dismiss()
+                    }
+                    .setPositiveButton(android.R.string.ok) { dialog, _ ->
+                        dialog.dismiss()
+                        webView?.loadUrl("javascript:window.location.reload(true)")
+                    }
+                    .show()
+                true
+            }
+            else ->
+                super.onOptionsItemSelected(item)
+        }
+    }
+
+    private fun setupActionBar() {
+        window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+        window.statusBarColor = ContextCompat.getColor(this, android.R.color.transparent)
+
+        setupActionBar(toolbar, isBackButtonEnabled = true) {
+            AlertDialog.Builder(this, R.style.SOSWidgetWebViewWebView_AlertDialogTheme)
+                .setTitle(android.R.string.dialog_alert_title)
+                .setMessage("Do you really want to leave widget?")
+                .setNegativeButton(android.R.string.cancel) { dialog, _ ->
+                    dialog.dismiss()
+                }
+                .setPositiveButton(android.R.string.ok) { dialog, _ ->
+                    dialog.dismiss()
+                    onBackPressed()
+                }
+                .show()
+        }
+    }
+
+    private fun setupWebView() {
         if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
             webView?.settings?.let {
                 WebSettingsCompat.setForceDark(
@@ -71,12 +142,6 @@ class MainActivity : AppCompatActivity(), WebView.Listener {
             }
         }
 
-        setupWebView()
-
-        webView?.loadUrl("https://kenes.vlx.kz/sos")
-    }
-
-    private fun setupWebView() {
         webView?.init()
         webView?.setupCookieManager()
         webView?.setMixedContentAllowed(true)
@@ -87,8 +152,8 @@ class MainActivity : AppCompatActivity(), WebView.Listener {
         webView?.setListener(this)
     }
 
-    private fun showRequestPermissionsDialog() {
-        AlertDialog.Builder(this)
+    private fun showRequestPermissionsAlertDialog() {
+        AlertDialog.Builder(this, R.style.SOSWidgetWebViewWebView_AlertDialogTheme)
             .setTitle("Grant permissions")
             .setMessage("Please, provide with permissions")
             .setPositiveButton("To Settings") { dialog, _ ->
@@ -102,6 +167,20 @@ class MainActivity : AppCompatActivity(), WebView.Listener {
                 )
             }
             .show()
+    }
+
+    private fun showGPSDisabledErrorAlertDialog() {
+        AlertDialog.Builder(this, R.style.SOSWidgetWebViewWebView_AlertDialogTheme)
+            .setCancelable(false)
+            .setTitle(android.R.string.dialog_alert_title)
+            .setMessage("Please enable \"Location\" function to provide stable application performance")
+            .setPositiveButton(android.R.string.ok) { dialog, _ ->
+                dialog.dismiss()
+
+                locationSettingsLauncher.launch(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+            }
+            .show()
+
     }
 
     override fun onReceivedSSLError(handler: SslErrorHandler?, error: SslError?) {
@@ -134,7 +213,16 @@ class MainActivity : AppCompatActivity(), WebView.Listener {
                 ) == PackageManager.PERMISSION_GRANTED
             }
         ) {
-            webView?.setGeolocationPermissionsShowPromptResult(true)
+            val locationManager = ContextCompat.getSystemService(this, LocationManager::class.java)
+            if (locationManager == null) {
+                showGPSDisabledErrorAlertDialog()
+            } else {
+                if (LocationManagerCompat.isLocationEnabled(locationManager)) {
+                    webView?.setGeolocationPermissionsShowPromptResult(true)
+                } else {
+                    showGPSDisabledErrorAlertDialog()
+                }
+            }
         } else {
             locationPermissionsLauncher.launch(LOCATION_PERMISSIONS)
         }

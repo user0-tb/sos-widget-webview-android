@@ -44,23 +44,25 @@ internal class WebView @JvmOverloads constructor(
 
         setLayerType(View.LAYER_TYPE_HARDWARE, null)
 
-        settings.builtInZoomControls = false
-        settings.setSupportZoom(false)
-        settings.databaseEnabled = true
-        settings.domStorageEnabled = true
-        settings.javaScriptEnabled = true
-        settings.cacheMode = WebSettings.LOAD_NO_CACHE
         settings.allowContentAccess = true
         settings.allowFileAccessFromFileURLs = true
         settings.allowFileAccess = true
         settings.allowUniversalAccessFromFileURLs = true
         settings.blockNetworkImage = false
         settings.blockNetworkLoads = false
+        settings.builtInZoomControls = false
+        settings.cacheMode = WebSettings.LOAD_NO_CACHE
+        settings.databaseEnabled = true
+        settings.domStorageEnabled = true
         settings.setGeolocationEnabled(true)
         settings.javaScriptCanOpenWindowsAutomatically = true
+        settings.javaScriptEnabled = true
+        settings.layoutAlgorithm = WebSettings.LayoutAlgorithm.NORMAL
         settings.loadsImagesAutomatically = true
         settings.loadWithOverviewMode = true
         settings.mediaPlaybackRequiresUserGesture = false
+        settings.setSupportMultipleWindows(false)
+        settings.setSupportZoom(false)
         settings.useWideViewPort = true
 
         // Enable remote debugging via chrome://inspect
@@ -109,6 +111,10 @@ internal class WebView @JvmOverloads constructor(
     }
 
     fun setGeolocationPermissionsShowPromptResult(success: Boolean) {
+        Log.d(
+            TAG,
+            "setGeolocationPermissionsShowPromptResult() -> $success, $geolocationPermissionsShowPrompt"
+        )
         if (success) {
             geolocationPermissionsShowPrompt?.callback?.invoke(
                 geolocationPermissionsShowPrompt?.origin,
@@ -158,18 +164,23 @@ internal class WebView @JvmOverloads constructor(
             callback: GeolocationPermissions.Callback?
         ) {
             super.onGeolocationPermissionsShowPrompt(origin, callback)
+
             Log.d(
                 TAG,
                 "onGeolocationPermissionsShowPrompt() -> origin: $origin, callback: $callback"
             )
 
-            geolocationPermissionsShowPrompt = GeolocationPermissionsShowPrompt(origin, callback)
+            geolocationPermissionsShowPrompt = GeolocationPermissionsShowPrompt(
+                origin = origin,
+                callback = callback
+            )
 
             listener?.onGeolocationPermissionsShowPrompt()
         }
 
         override fun onGeolocationPermissionsHidePrompt() {
             super.onGeolocationPermissionsHidePrompt()
+
             Log.d(TAG, "onGeolocationPermissionsHidePrompt()")
 
             geolocationPermissionsShowPrompt = null
