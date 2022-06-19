@@ -96,12 +96,12 @@ class WebViewActivity : AppCompatActivity(), WebView.Listener {
         return when (item.itemId) {
             R.id.reload -> {
                 AlertDialog.Builder(this, R.style.SOSWidgetWebViewWebView_AlertDialogTheme)
-                    .setTitle(android.R.string.dialog_alert_title)
-                    .setMessage("Do you really want to reload widget?")
-                    .setNegativeButton(android.R.string.cancel) { dialog, _ ->
+                    .setTitle("Внимание")
+                    .setMessage("Вы действительно хотите обновить виджет?")
+                    .setNegativeButton("Отмена") { dialog, _ ->
                         dialog.dismiss()
                     }
-                    .setPositiveButton(android.R.string.ok) { dialog, _ ->
+                    .setPositiveButton("Обновить виджет") { dialog, _ ->
                         dialog.dismiss()
                         webView?.loadUrl("javascript:window.location.reload(true)")
                     }
@@ -120,11 +120,11 @@ class WebViewActivity : AppCompatActivity(), WebView.Listener {
         setupActionBar(toolbar, isBackButtonEnabled = true) {
             AlertDialog.Builder(this, R.style.SOSWidgetWebViewWebView_AlertDialogTheme)
                 .setTitle(android.R.string.dialog_alert_title)
-                .setMessage("Do you really want to leave widget?")
-                .setNegativeButton(android.R.string.cancel) { dialog, _ ->
+                .setMessage("Вы действительно хотите выйти из виджета?")
+                .setNegativeButton("Отмена") { dialog, _ ->
                     dialog.dismiss()
                 }
-                .setPositiveButton(android.R.string.ok) { dialog, _ ->
+                .setPositiveButton("Выход") { dialog, _ ->
                     dialog.dismiss()
                     onBackPressed()
                 }
@@ -154,9 +154,10 @@ class WebViewActivity : AppCompatActivity(), WebView.Listener {
 
     private fun showRequestPermissionsAlertDialog() {
         AlertDialog.Builder(this, R.style.SOSWidgetWebViewWebView_AlertDialogTheme)
-            .setTitle("Grant permissions")
-            .setMessage("Please, provide with permissions")
-            .setPositiveButton("To Settings") { dialog, _ ->
+            .setCancelable(false)
+            .setTitle("Доступ к разрешениям")
+            .setMessage("Пожалуйста, предоставьте разрешения для полноценной работы виджета")
+            .setPositiveButton("К настройкам") { dialog, _ ->
                 dialog.dismiss()
 
                 startActivity(
@@ -172,8 +173,8 @@ class WebViewActivity : AppCompatActivity(), WebView.Listener {
     private fun showGPSDisabledErrorAlertDialog() {
         AlertDialog.Builder(this, R.style.SOSWidgetWebViewWebView_AlertDialogTheme)
             .setCancelable(false)
-            .setTitle(android.R.string.dialog_alert_title)
-            .setMessage("Please enable \"Location\" function to provide stable application performance")
+            .setTitle("Доступ к местоположению")
+            .setMessage("Пожалуйста, включите функцию \"Местоположение\" для совершения звонка")
             .setPositiveButton(android.R.string.ok) { dialog, _ ->
                 dialog.dismiss()
 
