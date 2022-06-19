@@ -13,7 +13,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.WindowManager
 import android.webkit.SslErrorHandler
-import android.webkit.ValueCallback
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -24,6 +24,13 @@ import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.appbar.MaterialToolbar
+import kz.gov.mia.sos.widget.webview.multimedia.preview.ImagePreviewDialogFragment
+import kz.gov.mia.sos.widget.webview.multimedia.preview.VideoPreviewDialogFragment
+import kz.gov.mia.sos.widget.webview.multimedia.selection.GetContentDelegate
+import kz.gov.mia.sos.widget.webview.multimedia.selection.GetContentResultContract
+import kz.gov.mia.sos.widget.webview.multimedia.selection.MimeType
+import kz.gov.mia.sos.widget.webview.multimedia.selection.StorageAccessFrameworkInteractor
+import kz.gov.mia.sos.widget.webview.utils.setupActionBar
 
 class WebViewActivity : AppCompatActivity(), WebView.Listener {
 
@@ -34,15 +41,22 @@ class WebViewActivity : AppCompatActivity(), WebView.Listener {
             Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.ACCESS_COARSE_LOCATION
         )
+
+        private val STORAGE_PERMISSIONS = arrayOf(
+            Manifest.permission.READ_EXTERNAL_STORAGE,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE
+        )
     }
 
     private var appBarLayout: AppBarLayout? = null
     private var toolbar: MaterialToolbar? = null
     private var webView: WebView? = null
 
-    private val commonPermissionsLauncher =
+    private var interactor: StorageAccessFrameworkInteractor? = null
+
+    private val requestedPermissionsLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
-            Log.d(TAG, "registerForActivityResult() -> permissions: $permissions")
+            Log.d(TAG, "requestedPermissionsLauncher() -> permissions: $permissions")
 
             webView?.setPermissionRequestResult(
                 PermissionRequestMapper.fromAndroidToWebClient(permissions)
@@ -55,7 +69,7 @@ class WebViewActivity : AppCompatActivity(), WebView.Listener {
 
     private val locationPermissionsLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
-            Log.d(TAG, "registerForActivityResult() -> permissions: $permissions")
+            Log.d(TAG, "locationPermissionsLauncher() -> permissions: $permissions")
 
             val isAllPermissionsGranted = permissions.all { it.value }
 
@@ -68,9 +82,22 @@ class WebViewActivity : AppCompatActivity(), WebView.Listener {
 
     private val locationSettingsLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            Log.d(TAG, "ActivityResultContracts.StartActivityForResult() -> ${result.resultCode}")
+            Log.d(TAG, "locationSettingsLauncher() -> resultCode: ${result.resultCode}")
 
             onGeolocationPermissionsShowPrompt()
+        }
+
+    private val storagePermissionsLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+            Log.d(TAG, "storagePermissionsLauncher() -> permissions: $permissions")
+
+            val isAllPermissionsGranted = permissions.all { it.value }
+
+            if (isAllPermissionsGranted) {
+                onSelectFileRequest()
+            } else {
+                showRequestPermissionsAlertDialog()
+            }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -83,6 +110,27 @@ class WebViewActivity : AppCompatActivity(), WebView.Listener {
 
         setupActionBar()
         setupWebView()
+
+        interactor = StorageAccessFrameworkInteractor(this) { result ->
+            when (result) {
+                is GetContentDelegate.Result.Success -> {
+                    webView?.setFileSelectionPromptResult(result.uri)
+                }
+                is GetContentDelegate.Result.Error.NullableUri -> {
+                    Toast.makeText(this, "Произошла ошибка", Toast.LENGTH_SHORT).show()
+                }
+                is GetContentDelegate.Result.Error.SizeLimitExceeds -> {
+                    Toast.makeText(
+                        this,
+                        "Извините, но вы превысили лимит (${result.maxSize}) при выборе файла",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+                else -> {
+                    Toast.makeText(this, "Произошла ошибка", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
 
         webView?.loadUrl("https://kenes.vlx.kz/sos")
     }
@@ -138,6 +186,13 @@ class WebViewActivity : AppCompatActivity(), WebView.Listener {
             else ->
                 super.onOptionsItemSelected(item)
         }
+    }
+
+    override fun onDestroy() {
+        interactor?.dispose()
+        interactor = null
+
+        super.onDestroy()
     }
 
     private fun setupActionBar() {
@@ -237,7 +292,7 @@ class WebViewActivity : AppCompatActivity(), WebView.Listener {
         AlertDialog.Builder(this, R.style.SOSWidgetWebViewWebView_AlertDialogTheme)
             .setCancelable(false)
             .setTitle("Доступ к разрешениям")
-            .setMessage("Пожалуйста, предоставьте разрешения для полноценной работы виджета")
+            .setMessage("Пожалуйста, предоставьте виджету разрешения для полноценной работы виджета")
             .setPositiveButton("К настройкам") { dialog, _ ->
                 dialog.dismiss()
 
@@ -271,15 +326,50 @@ class WebViewActivity : AppCompatActivity(), WebView.Listener {
     override fun onPageLoadProgress(progress: Int) {
     }
 
-    override fun onSelectFileRequested(filePathCallback: ValueCallback<Array<Uri>>?): Boolean {
-        return false
+    override fun onSelectFileRequest(): Boolean {
+        if (STORAGE_PERMISSIONS.all {
+                ActivityCompat.checkSelfPermission(
+                    this,
+                    it
+                ) == PackageManager.PERMISSION_GRANTED
+            }
+        ) {
+            AlertDialog.Builder(this)
+                .setTitle("Выбор медиа-вложения")
+                .setItems(
+                    arrayOf(
+                        "Фото",
+                        "Видео",
+                        "Аудио",
+                        "Документ"
+                    )
+                ) { dialog, which ->
+                    dialog.dismiss()
+
+                    when (which) {
+                        0 ->
+                            interactor?.launchSelection(GetContentResultContract.Params(MimeType.IMAGE))
+                        1 ->
+                            interactor?.launchSelection(GetContentResultContract.Params(MimeType.VIDEO))
+                        2 ->
+                            interactor?.launchSelection(GetContentResultContract.Params(MimeType.AUDIO))
+                        3 ->
+                            interactor?.launchSelection(GetContentResultContract.Params(MimeType.DOCUMENT))
+                    }
+                }
+                .show()
+        } else {
+            storagePermissionsLauncher.launch(STORAGE_PERMISSIONS)
+        }
+
+        return true
     }
 
     override fun onPermissionRequest(resources: Array<String>) {
         val permissions = PermissionRequestMapper.fromWebClientToAndroid(resources).toTypedArray()
         Log.d(TAG, "onPermissionRequest() -> resources: ${resources.contentToString()}")
         Log.d(TAG, "onPermissionRequest() -> permissions: ${permissions.contentToString()}")
-        commonPermissionsLauncher.launch(permissions)
+        requestedPermissionsLauncher.launch(permissions)
     }
 
     override fun onPermissionRequestCanceled(resources: Array<String>) {

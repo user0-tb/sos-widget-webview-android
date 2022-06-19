@@ -1,4 +1,4 @@
-package kz.gov.mia.sos.widget.webview
+package kz.gov.mia.sos.widget.webview.multimedia.preview
 
 import android.app.Dialog
 import android.net.Uri
@@ -16,6 +16,7 @@ import coil.load
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.imageview.ShapeableImageView
 import com.google.android.material.textview.MaterialTextView
+import kz.gov.mia.sos.widget.webview.R
 
 internal class ImagePreviewDialogFragment : DialogFragment() {
 

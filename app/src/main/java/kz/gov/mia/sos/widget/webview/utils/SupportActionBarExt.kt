@@ -1,4 +1,4 @@
-package kz.gov.mia.sos.widget.webview
+package kz.gov.mia.sos.widget.webview.utils
 
 import android.view.View
 import androidx.annotation.StringRes

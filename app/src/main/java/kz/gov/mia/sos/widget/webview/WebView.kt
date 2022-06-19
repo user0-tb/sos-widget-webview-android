@@ -28,11 +28,17 @@ internal class WebView @JvmOverloads constructor(
         val callback: GeolocationPermissions.Callback?
     )
 
+    data class FileSelectionPrompt constructor(
+        val fileChooserParams: WebChromeClient.FileChooserParams?,
+        val filePathCallback: ValueCallback<Array<Uri>>?
+    )
+
     private var urlListener: UrlListener? = null
     private var listener: Listener? = null
 
     private var permissionRequest: PermissionRequest? = null
     private var geolocationPermissionsShowPrompt: GeolocationPermissionsShowPrompt? = null
+    private var fileSelectionPrompt: FileSelectionPrompt? = null
 
     init {
         isFocusable = true
@@ -67,6 +73,19 @@ internal class WebView @JvmOverloads constructor(
 
         // Enable remote debugging via chrome://inspect
         setWebContentsDebuggingEnabled(true)
+    }
+
+    override fun onDetachedFromWindow() {
+        urlListener = null
+        listener = null
+
+        permissionRequest = null
+        geolocationPermissionsShowPrompt = null
+        fileSelectionPrompt = null
+
+        destroy()
+
+        super.onDetachedFromWindow()
     }
 
     fun setUrlListener(urlListener: UrlListener) {
@@ -129,6 +148,33 @@ internal class WebView @JvmOverloads constructor(
             )
         }
         geolocationPermissionsShowPrompt = null
+    }
+
+    fun setFileSelectionPromptResult(uri: Uri?) {
+        if (uri == null) {
+            setFileSelectionPromptResult(arrayOf())
+        } else {
+            setFileSelectionPromptResult(arrayOf(uri))
+        }
+    }
+
+    fun setFileSelectionPromptResult(uris: Array<Uri>?) {
+        Log.d(
+            TAG,
+            "setFileSelectionPromptResult() -> $uris, $fileSelectionPrompt"
+        )
+
+        try {
+            if (uris.isNullOrEmpty()) {
+                fileSelectionPrompt?.filePathCallback?.onReceiveValue(null)
+            } else {
+                fileSelectionPrompt?.filePathCallback?.onReceiveValue(uris)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        fileSelectionPrompt = null
     }
 
     private inner class MyWebChromeClient : WebChromeClient() {
@@ -262,8 +308,13 @@ internal class WebView @JvmOverloads constructor(
                         "${fileChooserParams?.title}," +
                         "${fileChooserParams?.createIntent()}"
             )
-            return listener?.onSelectFileRequested(filePathCallback)
-                ?: super.onShowFileChooser(webView, filePathCallback, fileChooserParams)
+
+            fileSelectionPrompt = FileSelectionPrompt(
+                fileChooserParams = fileChooserParams,
+                filePathCallback = filePathCallback
+            )
+
+            return listener?.onSelectFileRequest() == true
         }
 
         override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
@@ -362,7 +413,7 @@ internal class WebView @JvmOverloads constructor(
     interface Listener {
         fun onReceivedSSLError(handler: SslErrorHandler?, error: SslError?)
         fun onPageLoadProgress(progress: Int)
-        fun onSelectFileRequested(filePathCallback: ValueCallback<Array<Uri>>?): Boolean
+        fun onSelectFileRequest(): Boolean
         fun onPermissionRequest(resources: Array<String>)
         fun onPermissionRequestCanceled(resources: Array<String>)
         fun onGeolocationPermissionsShowPrompt()
