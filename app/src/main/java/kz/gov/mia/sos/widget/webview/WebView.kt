@@ -6,6 +6,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
 import android.net.http.SslError
+import android.os.Message
 import android.util.AttributeSet
 import android.util.Log
 import android.view.View
@@ -190,6 +191,49 @@ internal class WebView @JvmOverloads constructor(
                         "result: $result"
             )
             return super.onJsAlert(view, url, message, result)
+        }
+
+        override fun onJsConfirm(
+            view: android.webkit.WebView?,
+            url: String?,
+            message: String?,
+            result: JsResult?
+        ): Boolean {
+            Log.d(
+                TAG,
+                "onJsConfirm() -> " +
+                        "url: $url, " +
+                        "message: $message, " +
+                        "result: $result"
+            )
+            return super.onJsConfirm(view, url, message, result)
+        }
+
+        override fun onJsPrompt(
+            view: android.webkit.WebView?,
+            url: String?,
+            message: String?,
+            defaultValue: String?,
+            result: JsPromptResult?
+        ): Boolean {
+            Log.d(
+                TAG,
+                "onJsPrompt() -> " +
+                        "url: $url, " +
+                        "message: $message, " +
+                        "defaultValue: $defaultValue, " +
+                        "result: $result"
+            )
+            return super.onJsPrompt(view, url, message, defaultValue, result)
+        }
+
+        override fun onCreateWindow(
+            view: android.webkit.WebView?,
+            isDialog: Boolean,
+            isUserGesture: Boolean,
+            resultMsg: Message?
+        ): Boolean {
+            return super.onCreateWindow(view, isDialog, isUserGesture, resultMsg)
         }
 
         override fun onShowFileChooser(
