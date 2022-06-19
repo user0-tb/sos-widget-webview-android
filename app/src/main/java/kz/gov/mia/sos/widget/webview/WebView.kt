@@ -259,7 +259,8 @@ internal class WebView @JvmOverloads constructor(
                         "${fileChooserParams?.filenameHint}, " +
                         "${fileChooserParams?.isCaptureEnabled}, " +
                         "${fileChooserParams?.mode}, " +
-                        "${fileChooserParams?.title}"
+                        "${fileChooserParams?.title}," +
+                        "${fileChooserParams?.createIntent()}"
             )
             return listener?.onSelectFileRequested(filePathCallback)
                 ?: super.onShowFileChooser(webView, filePathCallback, fileChooserParams)
@@ -305,15 +306,16 @@ internal class WebView @JvmOverloads constructor(
             view: android.webkit.WebView?,
             request: WebResourceRequest?
         ): Boolean {
-            Log.d(TAG, "shouldOverrideUrlLoading() -> request.url: ${request?.url}")
+            Log.d(TAG, "shouldOverrideUrlLoading() -> ${request?.requestHeaders}, ${request?.url}")
 
             return if (request == null) {
                 false
             } else {
-                val headers = request.requestHeaders
-                val url = request.url
-                urlListener?.onLoadUrl(headers, url)
-                super.shouldOverrideUrlLoading(view, request)
+                if (urlListener?.onLoadUrl(request.requestHeaders, request.url) == true) {
+                    true
+                } else {
+                    super.shouldOverrideUrlLoading(view, request)
+                }
             }
         }
 
@@ -353,8 +355,8 @@ internal class WebView @JvmOverloads constructor(
         }
     }
 
-    interface UrlListener {
-        fun onLoadUrl(headers: Map<String, String>?, url: Uri)
+    fun interface UrlListener {
+        fun onLoadUrl(headers: Map<String, String>?, uri: Uri): Boolean
     }
 
     interface Listener {

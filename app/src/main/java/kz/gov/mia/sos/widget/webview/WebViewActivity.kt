@@ -75,7 +75,7 @@ class WebViewActivity : AppCompatActivity(), WebView.Listener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        setContentView(R.layout.activity_webview)
 
         appBarLayout = findViewById(R.id.appBarLayout)
         toolbar = findViewById(R.id.toolbar)
@@ -85,6 +85,33 @@ class WebViewActivity : AppCompatActivity(), WebView.Listener {
         setupWebView()
 
         webView?.loadUrl("https://kenes.vlx.kz/sos")
+    }
+
+    override fun onBackPressed() {
+        val fragments = supportFragmentManager.fragments
+
+        val imagePreviewDialogFragments =
+            fragments.filterIsInstance<ImagePreviewDialogFragment>()
+        val videoPreviewDialogFragments =
+            fragments.filterIsInstance<VideoPreviewDialogFragment>()
+
+        when {
+            imagePreviewDialogFragments.isNotEmpty() -> {
+                imagePreviewDialogFragments.forEach {
+                    it.dismiss()
+                    supportFragmentManager.fragments.remove(it)
+                }
+            }
+            videoPreviewDialogFragments.isNotEmpty() -> {
+                videoPreviewDialogFragments.forEach {
+                    it.dismiss()
+                    supportFragmentManager.fragments.remove(it)
+                }
+            }
+            else -> {
+                super.onBackPressed()
+            }
+        }
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
@@ -145,10 +172,64 @@ class WebViewActivity : AppCompatActivity(), WebView.Listener {
         webView?.init()
         webView?.setupCookieManager()
         webView?.setMixedContentAllowed(true)
-        webView?.setUrlListener(object : WebView.UrlListener {
-            override fun onLoadUrl(headers: Map<String, String>?, url: Uri) {
+        webView?.setUrlListener { headers, uri ->
+            Log.d(TAG, "setUrlListener() -> $headers, $uri")
+
+            if (uri.toString().contains("image")) {
+                ImagePreviewDialogFragment.show(
+                    fragmentManager = supportFragmentManager,
+                    uri = uri,
+                    caption = uri.toString()
+                )
+                return@setUrlListener true
+            } else if (uri.toString().contains("video")) {
+                VideoPreviewDialogFragment.show(
+                    fragmentManager = supportFragmentManager,
+                    uri = uri,
+                    caption = uri.toString()
+                )
             }
-        })
+
+            return@setUrlListener false
+        }
+
+        webView?.setDownloadListener { url, userAgent, contentDisposition, mimetype, contentLength ->
+            Log.d(
+                TAG,
+                "onDownloadStart() -> " +
+                        "url: $url, " +
+                        "userAgent: $userAgent, " +
+                        "contentDisposition: $contentDisposition, " +
+                        "mimetype: $mimetype, " +
+                        "contentLength: $contentLength"
+            )
+
+            if (mimetype?.startsWith("image") == true &&
+                (url.endsWith("png") ||
+                        url.endsWith("jpg") ||
+                        url.endsWith("jpeg"))
+            ) {
+                ImagePreviewDialogFragment.show(
+                    fragmentManager = supportFragmentManager,
+                    uri = Uri.parse(url),
+                    caption = null
+                )
+                return@setDownloadListener
+            } else if (mimetype?.startsWith("video") == true &&
+                (url.endsWith("mp4") ||
+                        url.endsWith("avi") ||
+                        url.endsWith("mov") ||
+                        url.endsWith("3gp"))
+            ) {
+                VideoPreviewDialogFragment.show(
+                    fragmentManager = supportFragmentManager,
+                    uri = Uri.parse(url),
+                    caption = null
+                )
+                return@setDownloadListener
+            }
+        }
+
         webView?.setListener(this)
     }
 
