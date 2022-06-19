@@ -1,0 +1,62 @@
+package kz.gov.mia.sos.widget.webview.ui.components
+
+import android.content.Context
+import android.util.AttributeSet
+import android.view.View
+import android.widget.FrameLayout
+import android.widget.ProgressBar
+import androidx.annotation.AttrRes
+import androidx.annotation.StyleRes
+import com.google.android.material.textview.MaterialTextView
+import kz.gov.mia.sos.widget.webview.R
+
+internal class ProgressView @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null,
+    @AttrRes defStyleAttr: Int = 0,
+    @StyleRes defStyleRes: Int = 0
+) : FrameLayout(context, attrs, defStyleAttr, defStyleRes) {
+
+    private val progressBar: ProgressBar
+    private val textView: MaterialTextView
+
+    init {
+        val view = inflate(context, R.layout.view_progress, this)
+
+        progressBar = view.findViewById(R.id.progressBar)
+        textView = view.findViewById(R.id.textView)
+    }
+
+    fun show() {
+        visibility = View.VISIBLE
+    }
+
+    fun hide() {
+        visibility = View.GONE
+    }
+
+    fun isProgressShown(): Boolean = visibility == View.VISIBLE
+
+    fun isProgressHidden(): Boolean = visibility == View.GONE
+
+    fun showTextView() {
+        if (textView.visibility != View.VISIBLE) {
+            textView.visibility = View.VISIBLE
+        }
+    }
+
+    fun hideTextView() {
+        if (textView.visibility != View.GONE) {
+            textView.visibility = View.GONE
+        }
+    }
+
+    fun isTextViewVisible(): Boolean = visibility == View.VISIBLE
+
+    fun isTextViewHidden(): Boolean = visibility == View.GONE
+
+    fun setText(text: String) {
+        textView.text = text
+    }
+
+}

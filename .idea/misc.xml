@@ -4,7 +4,9 @@
     <option name="filePathToZoomLevelMap">
       <map>
         <entry key="app/src/main/res/layout/activity_main.xml" value="0.1" />
+        <entry key="app/src/main/res/layout/activity_webview.xml" value="0.24537037037037038" />
         <entry key="app/src/main/res/layout/view_image_preview.xml" value="0.24537037037037038" />
+        <entry key="app/src/main/res/layout/view_progress.xml" value="0.24537037037037038" />
         <entry key="app/src/main/res/layout/view_video_preview.xml" value="0.24537037037037038" />
         <entry key="app/src/main/res/menu/webview.xml" value="0.24537037037037038" />
       </map>

@@ -30,6 +30,7 @@ import kz.gov.mia.sos.widget.webview.multimedia.selection.GetContentDelegate
 import kz.gov.mia.sos.widget.webview.multimedia.selection.GetContentResultContract
 import kz.gov.mia.sos.widget.webview.multimedia.selection.MimeType
 import kz.gov.mia.sos.widget.webview.multimedia.selection.StorageAccessFrameworkInteractor
+import kz.gov.mia.sos.widget.webview.ui.components.ProgressView
 import kz.gov.mia.sos.widget.webview.utils.setupActionBar
 
 class WebViewActivity : AppCompatActivity(), WebView.Listener {
@@ -51,6 +52,7 @@ class WebViewActivity : AppCompatActivity(), WebView.Listener {
     private var appBarLayout: AppBarLayout? = null
     private var toolbar: MaterialToolbar? = null
     private var webView: WebView? = null
+    private var progressView: ProgressView? = null
 
     private var interactor: StorageAccessFrameworkInteractor? = null
 
@@ -107,6 +109,7 @@ class WebViewActivity : AppCompatActivity(), WebView.Listener {
         appBarLayout = findViewById(R.id.appBarLayout)
         toolbar = findViewById(R.id.toolbar)
         webView = findViewById(R.id.webView)
+        progressView = findViewById(R.id.progressView)
 
         setupActionBar()
         setupWebView()
@@ -324,6 +327,13 @@ class WebViewActivity : AppCompatActivity(), WebView.Listener {
     }
 
     override fun onPageLoadProgress(progress: Int) {
+        if (progress < 95) {
+            progressView?.show()
+            progressView?.showTextView()
+            progressView?.setText("Загрузка виджета: $progress%")
+        } else {
+            progressView?.hide()
+        }
     }
 
     override fun onSelectFileRequest(): Boolean {
