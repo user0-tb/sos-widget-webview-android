@@ -1,24 +1,31 @@
 package kz.gov.mia.sos.widget.webview
 
 import android.Manifest
+import android.app.DownloadManager
+import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.net.Uri
 import android.net.http.SslError
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.provider.Settings
 import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.view.WindowManager
 import android.webkit.SslErrorHandler
+import android.webkit.URLUtil
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.core.location.LocationManagerCompat
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
@@ -26,12 +33,14 @@ import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.appbar.MaterialToolbar
 import kz.gov.mia.sos.widget.webview.multimedia.preview.ImagePreviewDialogFragment
 import kz.gov.mia.sos.widget.webview.multimedia.preview.VideoPreviewDialogFragment
+import kz.gov.mia.sos.widget.webview.multimedia.receiver.DownloadStateReceiver
 import kz.gov.mia.sos.widget.webview.multimedia.selection.GetContentDelegate
 import kz.gov.mia.sos.widget.webview.multimedia.selection.GetContentResultContract
 import kz.gov.mia.sos.widget.webview.multimedia.selection.MimeType
 import kz.gov.mia.sos.widget.webview.multimedia.selection.StorageAccessFrameworkInteractor
 import kz.gov.mia.sos.widget.webview.ui.components.ProgressView
 import kz.gov.mia.sos.widget.webview.utils.setupActionBar
+import java.io.File
 
 class WebViewActivity : AppCompatActivity(), WebView.Listener {
 
@@ -55,6 +64,18 @@ class WebViewActivity : AppCompatActivity(), WebView.Listener {
     private var progressView: ProgressView? = null
 
     private var interactor: StorageAccessFrameworkInteractor? = null
+
+    /**
+     * [DownloadManager] download ids list (which has downloading status)
+     */
+    private var pendingDownloads: MutableList<Pair<Long, String>>? = null
+
+    /**
+     * Files that already downloaded by [DownloadManager]
+     */
+    private var downloadedFiles: MutableList<Pair<String, Uri>>? = null
+
+    private var downloadStateReceiver: DownloadStateReceiver? = null
 
     private val requestedPermissionsLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
@@ -195,6 +216,20 @@ class WebViewActivity : AppCompatActivity(), WebView.Listener {
         interactor?.dispose()
         interactor = null
 
+        if (downloadStateReceiver != null) {
+            try {
+                unregisterReceiver(downloadStateReceiver)
+            } catch (e: IllegalArgumentException) {
+            }
+            downloadStateReceiver = null
+        }
+
+        pendingDownloads?.clear()
+        pendingDownloads = null
+
+        downloadedFiles?.clear()
+        downloadedFiles = null
+
         super.onDestroy()
     }
 
@@ -286,6 +321,112 @@ class WebViewActivity : AppCompatActivity(), WebView.Listener {
                 )
                 return@setDownloadListener
             }
+
+            if (pendingDownloads == null) {
+                pendingDownloads = mutableListOf()
+            }
+            if (url in (pendingDownloads ?: mutableListOf()).map { it.second }) {
+                Toast.makeText(
+                    this,
+                    "Извините, но загрузка файла еще не завершена",
+                    Toast.LENGTH_SHORT
+                ).show()
+                return@setDownloadListener
+            }
+
+            var isLocalFileFoundAndOpened = false
+            val found = downloadedFiles?.find { it.first == url }
+            if (found != null && !found.second.path.isNullOrBlank()) {
+                val file = File(requireNotNull(found.second.path))
+                Log.d(TAG, "file: $file")
+                isLocalFileFoundAndOpened = openFile(file, mimetype)
+            }
+
+            if (isLocalFileFoundAndOpened) return@setDownloadListener
+
+            val status = Environment.getExternalStorageState()
+            if (status != Environment.MEDIA_MOUNTED) {
+                return@setDownloadListener
+            }
+
+            val request = try {
+                DownloadManager.Request(Uri.parse(url))
+            } catch (e: IllegalArgumentException) {
+                e.printStackTrace()
+                return@setDownloadListener
+            }
+
+            val filename = URLUtil.guessFileName(url, contentDisposition, mimetype)
+            val downloadMessage = "\"$filename\" загружается"
+
+            val publicDirectory = Environment.DIRECTORY_DOWNLOADS
+
+            request.addRequestHeader("User-Agent", userAgent)
+            request.allowScanningByMediaScanner()
+            request.setAllowedOverMetered(true)
+            request.setAllowedOverRoaming(true)
+            request.setDescription(downloadMessage)
+            request.setDestinationInExternalPublicDir(publicDirectory, filename)
+            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                request.setRequiresCharging(false)
+                request.setRequiresDeviceIdle(false)
+            }
+            request.setTitle(filename)
+
+            downloadFile(request, url)
+
+            saveFile(
+                url,
+                getExternalFilesDir(publicDirectory) ?: File(Environment.DIRECTORY_DOWNLOADS),
+                filename
+            )
+
+            if (downloadStateReceiver != null) {
+                try {
+                    unregisterReceiver(downloadStateReceiver)
+                } catch (e: IllegalArgumentException) {
+                }
+                downloadStateReceiver = null
+            }
+            downloadStateReceiver = DownloadStateReceiver { downloadId, uri, mimeType ->
+                Log.d(
+                    TAG,
+                    "onFileUriReady() -> " +
+                            "downloadId: $downloadId, " +
+                            "uri: $uri," +
+                            " mimeType: $mimeType"
+                )
+
+                pendingDownloads?.removeAll { it.first == downloadId }
+
+                val path = uri?.path
+                if (!path.isNullOrBlank() && !mimeType.isNullOrBlank()) {
+                    if (uri.scheme == "file") {
+                        val file = File(path)
+
+                        AlertDialog.Builder(
+                            this@WebViewActivity,
+                            R.style.SOSWidgetWebViewWebView_AlertDialogTheme
+                        )
+                            .setCancelable(true)
+                            .setTitle("Загрузка файла завершена")
+                            .setMessage("Хотите ли вы открыть файл \"${file.name}\"?")
+                            .setNegativeButton("Нет") { dialog, _ ->
+                                dialog.dismiss()
+                            }
+                            .setPositiveButton("Открыть") { dialog, _ ->
+                                dialog.dismiss()
+                                openFile(file, mimeType)
+                            }
+                            .show()
+                    }
+                }
+            }
+            registerReceiver(
+                downloadStateReceiver,
+                IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
+            )
         }
 
         webView?.setListener(this)
@@ -320,7 +461,67 @@ class WebViewActivity : AppCompatActivity(), WebView.Listener {
                 locationSettingsLauncher.launch(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
             }
             .show()
+    }
 
+    private fun downloadFile(downloadRequest: DownloadManager.Request, url: String) {
+        val downloadManager = ContextCompat.getSystemService(
+            applicationContext,
+            DownloadManager::class.java
+        )
+        val id = downloadManager?.enqueue(downloadRequest)
+        if (pendingDownloads == null) {
+            pendingDownloads = mutableListOf()
+        }
+        if (id != null) {
+            val found = pendingDownloads?.indexOfFirst { it.first == id }
+            if (found == null || found < 0) {
+                pendingDownloads?.add(id to url)
+            } else {
+                pendingDownloads?.set(found, id to url)
+            }
+        }
+        Toast.makeText(this, "Загрузка файла началась", Toast.LENGTH_LONG).show()
+    }
+
+    private fun saveFile(url: String, folder: File, filename: String) {
+        val uri = Uri.withAppendedPath(Uri.fromFile(folder), filename)
+        if (downloadedFiles == null) {
+            downloadedFiles = mutableListOf()
+        }
+        val found = downloadedFiles?.indexOfFirst { it.first == url }
+        if (found == null || found < 0) {
+            downloadedFiles?.add(url to uri)
+        } else {
+            downloadedFiles?.set(found, url to uri)
+        }
+    }
+
+    private fun openFile(file: File, mimeType: String): Boolean {
+        val intent = Intent(Intent.ACTION_VIEW)
+        intent.flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+
+        val contentUri = try {
+            FileProvider.getUriForFile(
+                this,
+                "${packageName}.provider",
+                file
+            )
+        } catch (e: IllegalArgumentException) {
+            e.printStackTrace()
+            Toast.makeText(this, "Не удалось открыть файл", Toast.LENGTH_SHORT).show()
+            return false
+        }
+
+        intent.setDataAndType(contentUri, mimeType)
+
+        return try {
+            startActivity(intent)
+            true
+        } catch (e: ActivityNotFoundException) {
+            e.printStackTrace()
+            Toast.makeText(this, "Не удалось открыть файл", Toast.LENGTH_SHORT).show()
+            false
+        }
     }
 
     override fun onReceivedSSLError(handler: SslErrorHandler?, error: SslError?) {

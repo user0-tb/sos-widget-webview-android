@@ -124,6 +124,7 @@ internal class WebView @JvmOverloads constructor(
         if (permissions.isEmpty()) {
             permissionRequest?.deny()
         } else {
+            Log.d(TAG, "setPermissionRequestResult() -> $permissionRequest grant permissions: ${permissions.joinToString(", ")}")
             permissionRequest?.grant(permissions.toTypedArray())
         }
         permissionRequest = null
