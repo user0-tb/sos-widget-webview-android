@@ -96,12 +96,12 @@ class WebViewActivity : AppCompatActivity(), WebView.Listener {
         return when (item.itemId) {
             R.id.reload -> {
                 AlertDialog.Builder(this, R.style.SOSWidgetWebViewWebView_AlertDialogTheme)
-                    .setTitle("Внимание")
+                    .setTitle("Обновление виджета")
                     .setMessage("Вы действительно хотите обновить виджет?")
                     .setNegativeButton("Отмена") { dialog, _ ->
                         dialog.dismiss()
                     }
-                    .setPositiveButton("Обновить виджет") { dialog, _ ->
+                    .setPositiveButton("Обновить") { dialog, _ ->
                         dialog.dismiss()
                         webView?.loadUrl("javascript:window.location.reload(true)")
                     }
@@ -119,12 +119,12 @@ class WebViewActivity : AppCompatActivity(), WebView.Listener {
 
         setupActionBar(toolbar, isBackButtonEnabled = true) {
             AlertDialog.Builder(this, R.style.SOSWidgetWebViewWebView_AlertDialogTheme)
-                .setTitle(android.R.string.dialog_alert_title)
+                .setTitle("Выход из виджета")
                 .setMessage("Вы действительно хотите выйти из виджета?")
                 .setNegativeButton("Отмена") { dialog, _ ->
                     dialog.dismiss()
                 }
-                .setPositiveButton("Выход") { dialog, _ ->
+                .setPositiveButton("Выйти") { dialog, _ ->
                     dialog.dismiss()
                     onBackPressed()
                 }
