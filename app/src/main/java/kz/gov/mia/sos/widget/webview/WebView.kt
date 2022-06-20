@@ -83,8 +83,6 @@ internal class WebView @JvmOverloads constructor(
         geolocationPermissionsShowPrompt = null
         fileSelectionPrompt = null
 
-        destroy()
-
         super.onDetachedFromWindow()
     }
 

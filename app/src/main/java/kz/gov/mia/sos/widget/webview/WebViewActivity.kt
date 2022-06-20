@@ -212,6 +212,18 @@ class WebViewActivity : AppCompatActivity(), WebView.Listener {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+
+        webView?.onResume()
+    }
+
+    override fun onPause() {
+        super.onPause()
+
+        webView?.onPause()
+    }
+
     override fun onDestroy() {
         interactor?.dispose()
         interactor = null
@@ -231,6 +243,8 @@ class WebViewActivity : AppCompatActivity(), WebView.Listener {
         downloadedFiles = null
 
         super.onDestroy()
+
+        webView?.destroy()
     }
 
     private fun setupActionBar() {
